@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シンプルタイマー</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: light dark;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: #1a1a2e;
+    color: #f5f5f5;
+  }
+  .timer-card {
+    text-align: center;
+    padding: 2.5rem;
+    width: min(90vw, 400px);
+  }
+  .display {
+    font-size: 4rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 1.5rem;
+    word-break: break-all;
+  }
+  .display.warning {
+    color: #ff6b6b;
+  }
+  .input-row {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+  .input-row input {
+    width: 70px;
+    font-size: 1.2rem;
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: 8px;
+    border: none;
+    background: #2e2e4a;
+    color: #f5f5f5;
+  }
+  .input-row label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 0.8rem;
+    gap: 0.3rem;
+    opacity: 0.8;
+  }
+  .buttons {
+    display: flex;
+    gap: 0.7rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  button {
+    font-size: 1rem;
+    padding: 0.7rem 1.4rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.15s;
+  }
+  button:hover {
+    opacity: 0.85;
+  }
+  button:active {
+    transform: scale(0.97);
+  }
+  #startBtn { background: #4ecdc4; color: #003330; }
+  #pauseBtn { background: #ffe66d; color: #4a3b00; }
+  #resetBtn { background: #575775; color: #f5f5f5; }
+  button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+  <div class="timer-card">
+    <div class="display" id="display">00:00:00</div>
+    <div class="input-row">
+      <label>分
+        <input type="number" id="minInput" min="0" value="1">
+      </label>
+      <label>秒
+        <input type="number" id="secInput" min="0" max="59" value="0">
+      </label>
+    </div>
+    <div class="buttons">
+      <button id="startBtn">スタート</button>
+      <button id="pauseBtn" disabled>一時停止</button>
+      <button id="resetBtn">リセット</button>
+    </div>
+  </div>
+
+<script>
+  const display = document.getElementById('display');
+  const minInput = document.getElementById('minInput');
+  const secInput = document.getElementById('secInput');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  let remainingMs = 0;
+  let endTime = null;
+  let intervalId = null;
+
+  const beep = () => {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+    osc.onended = () => ctx.close();
+  };
+
+  function formatTime(ms) {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
+  }
+
+  function updateDisplay() {
+    display.textContent = formatTime(remainingMs);
+    display.classList.toggle('warning', remainingMs <= 10000 && remainingMs > 0);
+  }
+
+  function tick() {
+    remainingMs = endTime - Date.now();
+    if (remainingMs <= 0) {
+      remainingMs = 0;
+      updateDisplay();
+      stopInterval();
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      minInput.disabled = false;
+      secInput.disabled = false;
+      beep();
+      return;
+    }
+    updateDisplay();
+  }
+
+  function stopInterval() {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+
+  function getInputMs() {
+    const min = Math.max(0, parseInt(minInput.value, 10) || 0);
+    const sec = Math.max(0, parseInt(secInput.value, 10) || 0);
+    return (min * 60 + sec) * 1000;
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (remainingMs <= 0) {
+      remainingMs = getInputMs();
+      if (remainingMs <= 0) return;
+    }
+    endTime = Date.now() + remainingMs;
+    intervalId = setInterval(tick, 200);
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    minInput.disabled = true;
+    secInput.disabled = true;
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    stopInterval();
+    remainingMs = Math.max(0, endTime - Date.now());
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+  });
+
+  resetBtn.addEventListener('click', () => {
+    stopInterval();
+    remainingMs = 0;
+    updateDisplay();
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    minInput.disabled = false;
+    secInput.disabled = false;
+  });
+
+  updateDisplay();
+</script>
+</body>
+</html>
