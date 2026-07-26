@@ -1,0 +1,3 @@
+パスワード仮置き（あとで消す）
+site: example.com
+pw: correcthorse123
